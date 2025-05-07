@@ -29,6 +29,16 @@ echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES" # Check if this is set manual
 OUTPUT_DIR="./cifar_output_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${OUTPUT_DIR}"
 
+# --- System Metrics Logging ---
+SYSTEM_METRICS_LOG_FILE="${OUTPUT_DIR}/system_metrics.csv"
+SYSTEM_METRICS_INTERVAL=5 # Log every 5 seconds
+echo "Starting system metrics logging to ${SYSTEM_METRICS_LOG_FILE} every ${SYSTEM_METRICS_INTERVAL} seconds."
+# Assuming log_system_metrics.py is in the same directory or in PATH
+# The log_system_metrics.py script will run until killed.
+python log_system_metrics.py --output "${SYSTEM_METRICS_LOG_FILE}" --interval "${SYSTEM_METRICS_INTERVAL}" &
+SYSTEM_METRICS_PID=$!
+echo "System metrics logger started with PID: ${SYSTEM_METRICS_PID}"
+
 # --- nvidia-smi Logging ---
 GPU_LOG_FILE="${OUTPUT_DIR}/gpu_stats.csv" # Changed OUTPUT_DIR_BASE to OUTPUT_DIR
 if [ -n "$CUDA_VISIBLE_DEVICES" ]; then
@@ -125,11 +135,84 @@ TRAIN_EXIT_CODE=$?
 echo "Training finished with exit code: ${TRAIN_EXIT_CODE}"
 
 # --- Cleanup ---
+if [ -n "$SYSTEM_METRICS_PID" ]; then
+    echo "Stopping system metrics logging (PID: ${SYSTEM_METRICS_PID})..."
+    kill ${SYSTEM_METRICS_PID}
+    wait ${SYSTEM_METRICS_PID} 2>/dev/null
+    echo "System metrics logging stopped."
+fi
+
 if [ -n "$NVIDIA_SMI_PID" ]; then
     echo "Stopping nvidia-smi logging..."
     kill ${NVIDIA_SMI_PID}
     wait ${NVIDIA_SMI_PID} 2>/dev/null
 fi
+
+# --- Plot GPU Stats ---
+echo "Plotting GPU statistics..."
+if [ -f "${GPU_LOG_FILE}" ]; then
+    # Ensure plot_gpu_stats.py is executable and in PATH or provide full path
+    # Assuming plot_gpu_stats.py is in the same directory as run_cifar_job.sh or in PATH
+    python plot_gpu_stats.py "${GPU_LOG_FILE}"
+    PLOT_EXIT_CODE=$?
+    if [ ${PLOT_EXIT_CODE} -eq 0 ]; then
+        echo "GPU statistics plotted successfully."
+    else
+        echo "Warning: GPU statistics plotting failed with exit code ${PLOT_EXIT_CODE}."
+    fi
+else
+    echo "Warning: GPU log file ${GPU_LOG_FILE} not found. Skipping plotting."
+fi
+
+# --- Plot System Metrics ---
+echo "Plotting system statistics..."
+if [ -f "${SYSTEM_METRICS_LOG_FILE}" ]; then
+    # Assuming plot_system_metrics.py is executable and in PATH or provide full path
+    # This script will be created in the next step
+    python plot_system_metrics.py "${SYSTEM_METRICS_LOG_FILE}"
+    PLOT_SYS_EXIT_CODE=$?
+    if [ ${PLOT_SYS_EXIT_CODE} -eq 0 ]; then
+        echo "System statistics plotted successfully."
+    else
+        echo "Warning: System statistics plotting failed with exit code ${PLOT_SYS_EXIT_CODE}."
+    fi
+else
+    echo "Warning: System metrics log file ${SYSTEM_METRICS_LOG_FILE} not found. Skipping plotting."
+fi
+
+# --- Consolidate Run Summary ---
+CONSOLIDATED_SUMMARY_FILE="${OUTPUT_DIR}/consolidated_run_summary.txt"
+echo "Creating consolidated run summary: ${CONSOLIDATED_SUMMARY_FILE}"
+
+echo "=== GPU METRICS (gpu_stats.csv) ===" > "${CONSOLIDATED_SUMMARY_FILE}"
+if [ -f "${GPU_LOG_FILE}" ]; then
+    cat "${GPU_LOG_FILE}" >> "${CONSOLIDATED_SUMMARY_FILE}"
+else
+    echo "GPU_LOG_FILE not found." >> "${CONSOLIDATED_SUMMARY_FILE}"
+fi
+echo -e "\\n\\n" >> "${CONSOLIDATED_SUMMARY_FILE}" # Add some spacing
+
+echo "=== SYSTEM METRICS (system_metrics.csv) ===" >> "${CONSOLIDATED_SUMMARY_FILE}"
+if [ -f "${SYSTEM_METRICS_LOG_FILE}" ]; then
+    cat "${SYSTEM_METRICS_LOG_FILE}" >> "${CONSOLIDATED_SUMMARY_FILE}"
+else
+    echo "SYSTEM_METRICS_LOG_FILE not found." >> "${CONSOLIDATED_SUMMARY_FILE}"
+fi
+echo -e "\\n\\n" >> "${CONSOLIDATED_SUMMARY_FILE}"
+
+echo "=== TRAINING SCRIPT (cifar10_train.py) ===" >> "${CONSOLIDATED_SUMMARY_FILE}"
+if [ -f "cifar10_train.py" ]; then # Assuming cifar10_train.py is in the same directory as the script
+    cat "cifar10_train.py" >> "${CONSOLIDATED_SUMMARY_FILE}"
+else
+    echo "cifar10_train.py not found." >> "${CONSOLIDATED_SUMMARY_FILE}"
+fi
+echo -e "\\n\\n" >> "${CONSOLIDATED_SUMMARY_FILE}"
+
+echo "=== JOB SCRIPT (run_cifar_job.sh) ===" >> "${CONSOLIDATED_SUMMARY_FILE}"
+cat "$0" >> "${CONSOLIDATED_SUMMARY_FILE}" # $0 refers to the script itself
+echo -e "\\n\\n" >> "${CONSOLIDATED_SUMMARY_FILE}"
+
+echo "Consolidated summary created."
 
 echo "Job finished. Output and logs are in ${OUTPUT_DIR}" # Changed OUTPUT_DIR_BASE to OUTPUT_DIR
 # if [ -d "${VTUNE_RESULT_DIR}" ]; then
