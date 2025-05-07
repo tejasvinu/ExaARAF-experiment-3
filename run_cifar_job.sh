@@ -15,14 +15,12 @@
 # --- Environment Setup ---
 echo "Setting up Python environment..."
 
-# Create and activate virtual environment if it doesn't exist
-python -m venv venv
-source ./venv/bin/activate  # For Linux/Mac
-# Or use this for Windows:
-# .\venv\Scripts\activate
+module load anaconda3/anaconda3
+module load cuda/11.8
 
-# Install required packages
-pip install -r requirements.txt
+source /home/apps/anaconda3/etc/profile.d/conda.sh  # Use the correct path you found
+
+conda activate pytorch-gpu
 
 echo "Python environment ready"
 echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES" # Should be set by Slurm if gres is used
