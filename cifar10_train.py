@@ -22,15 +22,17 @@ def get_args_parser():
     parser.add_argument('--output-dir', default='./output', help='path where to save')
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--amp', action='store_true', help='use AMP training')
+    parser.add_argument("--local_rank", type=int, default=0, help="Local rank. Passed by torchrun.")
     return parser
 
 def main(args):
     # Set up distributed training if using multiple GPUs
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        dist.init_process_group(backend='nccl')
+    is_distributed = torch.cuda.is_available() and torch.cuda.device_count() > 1
+    if is_distributed:
+        dist.init_process_group(backend='nccl', init_method='env://')
         torch.cuda.set_device(args.local_rank)
     
-    device = torch.device(args.device)
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
     # Data augmentation and normalization for training
     transform_train = transforms.Compose([
@@ -67,7 +69,7 @@ def main(args):
     model = torchvision.models.resnet18(num_classes=10)
     model = model.to(device)
     
-    if dist.is_initialized():
+    if is_distributed:
         model = DDP(model, device_ids=[args.local_rank])
 
     # Loss function and optimizer
