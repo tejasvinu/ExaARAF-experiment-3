@@ -70,7 +70,7 @@ def main(args):
     model = model.to(device)
     
     if is_distributed:
-        model = DDP(model, device_ids=[args.local_rank])
+        model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     # Loss function and optimizer
     criterion = nn.CrossEntropyLoss()
