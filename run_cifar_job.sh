@@ -12,15 +12,15 @@
 #SBATCH --error=cifar_train_job_%j.err
 #SBATCH --partition=gpu     # Or your specific GPU partition
 
-# --- Environment Setup ---
-echo "Setting up Python environment..."
+# # --- Environment Setup ---
+# echo "Setting up Python environment..."
 
-module load anaconda3/anaconda3
-module load cuda/11.8
+# module load anaconda3/anaconda3
+# module load cuda/11.8
 
-source /home/apps/anaconda3/etc/profile.d/conda.sh  # Use the correct path you found
+# source /home/apps/anaconda3/etc/profile.d/conda.sh  # Use the correct path you found
 
-conda activate pytorch-gpu
+# conda activate pytorch-gpu
 
 echo "Python environment ready"
 echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES" # Should be set by Slurm if gres is used
